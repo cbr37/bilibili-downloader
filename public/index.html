@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>B站视频音频下载工具</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+    <!-- 背景装饰 -->
+    <div class="bg-decoration">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
+
+    <!-- 顶部导航 -->
+    <header class="header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+            <path d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.248 1.56 3.76v7.227c-.072 1.484-.57 2.733-1.495 3.747a4.826 4.826 0 0 1-1.725 1.187 5.69 5.69 0 0 1-2.113.488H6.187c-.99-.018-1.882-.27-2.676-.755a4.83 4.83 0 0 1-1.86-1.838 5.265 5.265 0 0 1-.649-2.087A6.27 6.27 0 0 1 1 17.213V9.988a5.454 5.454 0 0 1 .297-1.652 4.714 4.714 0 0 1 .747-1.417 5.292 5.292 0 0 1 1.858-1.524 6.108 6.108 0 0 1 2.285-.742h.478l1.683-1.84A2.146 2.146 0 0 1 10.118 2c.681 0 1.293.26 1.846.813l1.683 1.84Zm-5.787 8.265c.41 0 .75-.152 1.022-.457l1.843-1.832c.323-.34.485-.734.485-1.183 0-.5-.17-.914-.513-1.24a1.652 1.652 0 0 0-1.224-.489 1.7 1.7 0 0 0-1.163.423l-.42.377-.42-.377a1.7 1.7 0 0 0-1.164-.423 1.65 1.65 0 0 0-1.224.489c-.342.326-.513.74-.513 1.24 0 .45.162.843.485 1.183l1.843 1.832c.272.305.613.457 1.022.457Z"/>
+          </svg>
+        </div>
+        <span class="logo-text">B站下载工具</span>
+      </div>
+      <nav class="nav-links">
+        <a href="#how-it-works">使用说明</a>
+        <a href="#faq">常见问题</a>
+      </nav>
+    </header>
+
+    <!-- Hero / 输入区 -->
+    <main class="main">
+      <section class="hero">
+        <h1 class="hero-title">
+          一键下载<span class="accent">B站视频</span><br>
+          音频 / 视频 自由选择
+        </h1>
+        <p class="hero-subtitle">
+          只需粘贴B站视频链接，即可快速解析并下载音频（MP3）或视频（MP4）
+        </p>
+
+        <!-- 链接输入 -->
+        <div class="url-input-wrapper">
+          <div class="url-input-box" id="urlInputBox">
+            <svg class="link-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            <input
+              type="text"
+              id="urlInput"
+              class="url-input"
+              placeholder="粘贴B站视频链接，如 https://www.bilibili.com/video/BV..."
+              autocomplete="off"
+            >
+            <button id="parseBtn" class="parse-btn">
+              <span id="parseBtnText" class="parse-btn-text">解析视频</span>
+              <span id="parseBtnLoader" class="parse-btn-loader" hidden>
+                <span class="spinner"></span>
+              </span>
+            </button>
+          </div>
+          <div class="url-hint" id="urlHint">
+            支持普通视频链接（bilibili.com）和短链（b23.tv）
+          </div>
+        </div>
+      </section>
+
+      <!-- 视频信息卡片 -->
+      <section class="video-card-wrapper" id="videoCardWrapper" hidden>
+        <div class="video-card" id="videoCard">
+          <div class="video-card-thumb">
+            <img id="videoThumbnail" src="" alt="视频封面" loading="lazy">
+            <div class="video-duration" id="videoDuration"></div>
+          </div>
+          <div class="video-card-info">
+            <h3 class="video-title" id="videoTitle"></h3>
+            <div class="video-meta">
+              <span class="meta-item">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span id="videoUploader"></span>
+              </span>
+              <span class="meta-item" id="metaViews">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span id="videoViews"></span>
+              </span>
+            </div>
+            <div class="download-actions">
+              <button class="download-btn download-btn-audio" id="downloadAudioBtn" data-format="audio">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 18V5l12-2v13"/>
+                  <circle cx="6" cy="18" r="3"/>
+                  <circle cx="18" cy="16" r="3"/>
+                </svg>
+                <span>下载音频 MP3</span>
+              </button>
+              <button class="download-btn download-btn-video" id="downloadVideoBtn" data-format="video">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>下载视频 MP4</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 下载进度 -->
+        <div class="download-progress" id="downloadProgress" hidden>
+          <div class="progress-header">
+            <div class="progress-info">
+              <span class="progress-label" id="progressLabel">正在下载...</span>
+              <span class="progress-percent" id="progressPercent">0%</span>
+            </div>
+            <button class="cancel-btn" id="cancelBtn" hidden>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+          </div>
+          <div class="progress-status" id="progressStatus"></div>
+        </div>
+
+        <!-- 下载完成 -->
+        <div class="download-complete" id="downloadComplete" hidden>
+          <div class="complete-icon">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <div class="complete-text">
+            <span class="complete-title">下载完成！</span>
+            <span class="complete-desc" id="completeDesc">点击下方按钮保存文件</span>
+          </div>
+          <a href="#" id="downloadFileBtn" class="download-file-btn">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>保存文件</span>
+          </a>
+        </div>
+      </section>
+
+      <!-- 使用说明 -->
+      <section class="how-it-works" id="how-it-works">
+        <h2 class="section-title">使用说明</h2>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h3>复制视频链接</h3>
+              <p>在B站打开你想下载的视频，复制浏览器地址栏中的链接</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h3>粘贴并解析</h3>
+              <p>将链接粘贴到上方输入框，点击「解析视频」按钮</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h3>选择格式下载</h3>
+              <p>解析成功后，选择下载音频（MP3）或视频（MP4），等待完成即可保存</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section class="faq" id="faq">
+        <h2 class="section-title">常见问题</h2>
+        <div class="faq-list">
+          <div class="faq-item">
+            <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+              <span>支持哪些链接格式？</span>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="faq-a">
+              <p>支持 bilibili.com 的普通视频链接、番剧链接，以及 b23.tv 短链接。不支持直播回放和会员专属内容。</p>
+            </div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+              <span>下载的文件保存在哪里？</span>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="faq-a">
+              <p>点击「保存文件」后，文件会下载到你浏览器的默认下载目录。请注意文件会在服务器临时保留 1 小时后自动清除。</p>
+            </div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+              <span>下载失败怎么办？</span>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="faq-a">
+              <p>请检查链接是否正确、视频是否已下架或需要大会员权限。部分高画质视频需要登录才能下载，可尝试降低画质后重试。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+      <p>本工具仅供个人学习使用，请遵守B站用户协议及版权法规</p>
+    </footer>
+  </div>
+
+  <!-- Toast 通知 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

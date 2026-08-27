@@ -1,0 +1,14 @@
+{
+  "name": "bilibili-downloader",
+  "version": "2.0.0",
+  "description": "B站视频音频下载工具 - 粘贴链接即可下载音频(MP3)或视频(MP4)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0"
+  }
+}
