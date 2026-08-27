@@ -39,6 +39,14 @@ const downloadFileBtn = $("downloadFileBtn");
 
 const toastContainer = $("toastContainer");
 
+// Cookie / 画质相关
+const cookieToggle = $("cookieToggle");
+const cookieInputWrapper = $("cookieInputWrapper");
+const cookieInput = $("cookieInput");
+const qualitySelector = $("qualitySelector");
+const qualitySelect = $("qualitySelect");
+const qualityCount = $("qualityCount");
+
 // 状态管理
 let currentVideoInfo = null;
 let currentEventSource = null;
@@ -77,6 +85,24 @@ function showToast(message, type = "info") {
   }, 3500);
 }
 
+// 获取 Cookie（前端构建为 SESSDATA=xxx 格式）
+function getCookie() {
+  const val = cookieInput.value.trim();
+  if (!val) return "";
+  // 用户可能直接粘贴 SESSDATA 值，也可能粘贴完整 Cookie
+  if (val.startsWith("SESSDATA=") || val.includes("=")) {
+    return val;
+  }
+  return `SESSDATA=${val}`;
+}
+
+// Cookie 折叠面板切换
+cookieToggle.addEventListener("click", () => {
+  const isHidden = cookieInputWrapper.hidden;
+  cookieInputWrapper.hidden = !isHidden;
+  cookieToggle.classList.toggle("open", isHidden);
+});
+
 // 验证B站URL
 function isValidBilibiliUrl(url) {
   const patterns = [
@@ -113,10 +139,11 @@ async function parseVideo() {
   videoCardWrapper.hidden = true;
 
   try {
+    const cookie = getCookie();
     const response = await fetch("/api/info", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, cookie }),
     });
 
     const data = await response.json();
@@ -175,6 +202,25 @@ function displayVideoInfo(info) {
     } else {
       videoDuration.hidden = true;
     }
+  }
+
+  // 画质选择器：有可用画质列表时显示
+  if (info.qualities && info.qualities.length > 0) {
+    qualitySelect.innerHTML = "";
+    // 按画质从高到低排序
+    const sortedQ = [...info.qualities].sort((a, b) => b.qn - a.qn);
+    sortedQ.forEach((q) => {
+      const option = document.createElement("option");
+      option.value = q.qn;
+      option.textContent = q.label;
+      qualitySelect.appendChild(option);
+    });
+    // 默认选当前画质
+    qualitySelect.value = String(info.currentQuality || sortedQ[0].qn);
+    qualityCount.textContent = `${sortedQ.length} 种画质`;
+    qualitySelector.hidden = false;
+  } else {
+    qualitySelector.hidden = true;
   }
 
   if (info.viewCount > 0) {
@@ -237,6 +283,10 @@ function startDownload(format) {
     episodeLabel = ep ? `《${ep.displayTitle}》` : "";
   }
 
+  // 获取 cookie 和画质
+  const cookie = getCookie();
+  const qn = !qualitySelector.hidden ? parseInt(qualitySelect.value, 10) : undefined;
+
   // 重置 UI
   downloadComplete.hidden = true;
   downloadProgress.hidden = false;
@@ -264,6 +314,8 @@ function startDownload(format) {
       url: currentVideoInfo.url,
       format,
       ...(epId ? { epId } : {}),
+      ...(cookie ? { cookie } : {}),
+      ...(qn ? { qn } : {}),
     }),
     signal: controller.signal,
   })

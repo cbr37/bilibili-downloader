@@ -68,6 +68,29 @@
           <div class="url-hint" id="urlHint">
             支持普通视频、番剧/影视（bilibili.com/bangumi/play/ep...）和短链（b23.tv）
           </div>
+
+          <!-- 大会员 Cookie 输入 -->
+          <div class="cookie-section">
+            <button type="button" class="cookie-toggle" id="cookieToggle">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4"/></svg>
+              <span>大会员登录（可选）</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="cookie-input-wrapper" id="cookieInputWrapper" hidden>
+              <input
+                type="password"
+                id="cookieInput"
+                class="cookie-input"
+                placeholder="粘贴 SESSDATA 值，如 abc%3D..."
+                autocomplete="off"
+              >
+              <div class="cookie-hint">
+                获取方式：B站登录 → F12开发者工具 → Application → Cookies → 复制 SESSDATA 的值。
+                填入后可下载大会员专享剧集及 1080P/4K 高画质。
+                <span class="cookie-warning">⚠ Cookie 仅用于本次下载，不会存储。</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -102,6 +125,17 @@
                 <span class="episode-count" id="episodeCount"></span>
               </label>
               <select id="episodeSelect" class="episode-select">
+              </select>
+            </div>
+
+            <!-- 画质选择器 -->
+            <div class="episode-selector" id="qualitySelector" hidden>
+              <label class="episode-label" for="qualitySelect">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+                <span>选择画质</span>
+                <span class="episode-count" id="qualityCount"></span>
+              </label>
+              <select id="qualitySelect" class="episode-select">
               </select>
             </div>
 

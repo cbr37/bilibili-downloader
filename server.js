@@ -50,14 +50,38 @@ app.use(express.static(join(__dirname, "public")));
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+// 转义 curl 参数中的特殊字符（防止命令注入）
+function escapeShellStr(str) {
+  return str.replace(/'/g, "'\\''");
+}
+
+// 从 cookie 字符串中提取 SESSDATA
+function extractSessdata(cookie) {
+  if (!cookie) return "";
+  const match = cookie.match(/SESSDATA=([^;]+)/);
+  return match ? match[1] : cookie.trim();
+}
+
 // 使用 curl 调用B站API（自动使用代理环境变量）
-async function bilibiliApiGet(url) {
+// cookie: 可选，B站 Cookie 字符串（含 SESSDATA）
+async function bilibiliApiGet(url, cookie = "") {
   let lastError = null;
+  // 构建 curl header 参数
+  const headers = [
+    "-H",
+    `'User-Agent: ${UA}'`,
+    "-H",
+    "'Referer: https://www.bilibili.com/'",
+  ];
+  if (cookie) {
+    headers.push("-H", `'Cookie: ${escapeShellStr(cookie)}'`);
+  }
+
   // 重试 3 次
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const { stdout } = await execAsync(
-        `curl -s -L --connect-timeout 10 --max-time 30 "${url}" -H "User-Agent: ${UA}" -H "Referer: https://www.bilibili.com/"`,
+        `curl -s -L --connect-timeout 10 --max-time 30 '${escapeShellStr(url)}' ${headers.join(" ")}`,
         { maxBuffer: 50 * 1024 * 1024 }
       );
       if (!stdout || stdout.trim() === "") {
@@ -134,9 +158,9 @@ async function parseBilibiliUrl(url) {
 // ===== B站 API =====
 
 // 获取视频信息
-async function getVideoInfo(bvid) {
+async function getVideoInfo(bvid, cookie = "") {
   const apiUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`;
-  const data = await bilibiliApiGet(apiUrl);
+  const data = await bilibiliApiGet(apiUrl, cookie);
 
   if (data.code !== 0) {
     throw new Error(data.message || "获取视频信息失败");
@@ -158,9 +182,10 @@ async function getVideoInfo(bvid) {
 }
 
 // 获取播放地址（DASH 流）
-async function getStreamUrls(bvid, cid) {
-  const apiUrl = `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&qn=80&fnval=4048&fourk=1`;
-  const data = await bilibiliApiGet(apiUrl);
+// qn: 画质代码，有 cookie 时可请求高画质（127=8K, 120=4K, 116=1080P60, 112=1080P+, 80=1080P）
+async function getStreamUrls(bvid, cid, cookie = "", qn = 80) {
+  const apiUrl = `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&qn=${qn}&fnval=4048&fourk=1`;
+  const data = await bilibiliApiGet(apiUrl, cookie);
 
   if (data.code !== 0) {
     throw new Error(data.message || "获取播放地址失败");
@@ -218,11 +243,11 @@ async function getStreamUrls(bvid, cid) {
 // ===== 番剧 API =====
 
 // 获取番剧/影视信息（含剧集列表）
-async function getBangumiInfo(epId, ssId) {
+async function getBangumiInfo(epId, ssId, cookie = "") {
   const apiUrl = epId
     ? `https://api.bilibili.com/pgc/view/web/season?ep_id=${epId}`
     : `https://api.bilibili.com/pgc/view/web/season?season_id=${ssId}`;
-  const data = await bilibiliApiGet(apiUrl);
+  const data = await bilibiliApiGet(apiUrl, cookie);
 
   if (data.code !== 0) {
     throw new Error(data.message || "获取番剧信息失败");
@@ -277,9 +302,10 @@ async function getBangumiInfo(epId, ssId) {
 }
 
 // 获取番剧播放地址（DASH 流）
-async function getBangumiStreamUrls(epId, cid) {
-  const apiUrl = `https://api.bilibili.com/pgc/player/web/playurl?ep_id=${epId}&cid=${cid}&qn=80&fnval=4048&fourk=1`;
-  const data = await bilibiliApiGet(apiUrl);
+// qn: 画质代码，有 cookie 时可请求高画质
+async function getBangumiStreamUrls(epId, cid, cookie = "", qn = 80) {
+  const apiUrl = `https://api.bilibili.com/pgc/player/web/playurl?ep_id=${epId}&cid=${cid}&qn=${qn}&fnval=4048&fourk=1`;
+  const data = await bilibiliApiGet(apiUrl, cookie);
 
   if (data.code !== 0) {
     throw new Error(data.message || "获取播放地址失败");
@@ -306,29 +332,55 @@ async function getBangumiStreamUrls(epId, cid) {
     (a, b) => (b.bandwidth || 0) - (a.bandwidth || 0)
   )[0] || null;
 
+  // 可用画质列表
+  const qualityLabels = {
+    127: "8K 超高清",
+    126: "杜比视界",
+    125: "HDR 真彩",
+    120: "4K 超清",
+    116: "1080P60",
+    112: "1080P 高码率",
+    80: "1080P 高清",
+    74: "720P60",
+    64: "720P",
+    48: "480P",
+    32: "360P",
+    16: "240P",
+  };
+  const qualities = (d.accept_quality || []).map((qn) => ({
+    qn,
+    label: qualityLabels[qn] || `${qn}P`,
+  }));
+
   return {
     video: bestVideo,
     audio: bestAudio,
     currentQuality: d.quality,
+    qualities,
   };
 }
 
 // 下载流文件（使用 curl，返回 Promise + 进度回调）
-function downloadStream(url, outputPath, onProgress) {
+// cookie: 可选，用于下载大会员专享流
+function downloadStream(url, outputPath, onProgress, cookie = "") {
   return new Promise((resolve, reject) => {
     const args = [
       "-L",
       "--connect-timeout", "15",
-      "--max-time", "120",
+      "--max-time", "300",
       "-o",
       outputPath,
       "-H",
       "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       "-H",
       "Referer: https://www.bilibili.com/",
-      "--progress-bar",
-      url,
     ];
+
+    if (cookie) {
+      args.push("-H", `Cookie: ${cookie}`);
+    }
+
+    args.push("--progress-bar", url);
 
     const curl = spawn("curl", args);
     let stderrData = "";
@@ -468,11 +520,14 @@ function sanitizeFileName(name) {
 
 // 获取视频/番剧信息
 app.post("/api/info", async (req, res) => {
-  const { url } = req.body;
+  const { url, cookie } = req.body;
 
   if (!url || !url.trim()) {
     return res.status(400).json({ error: "请输入链接" });
   }
+
+  // 有 cookie 时请求最高画质以获取完整画质列表
+  const qn = cookie ? 127 : 80;
 
   try {
     const parsed = await parseBilibiliUrl(url);
@@ -484,11 +539,13 @@ app.post("/api/info", async (req, res) => {
 
     // ===== 番剧/影视 =====
     if (parsed.type === "bangumi") {
-      const info = await getBangumiInfo(parsed.epId, parsed.ssId);
+      const info = await getBangumiInfo(parsed.epId, parsed.ssId, cookie);
       const selected = info.episodes[info.selectedIdx];
       const streams = await getBangumiStreamUrls(
         selected.epId,
-        selected.cid
+        selected.cid,
+        cookie,
+        qn
       );
 
       return res.json({
@@ -509,12 +566,14 @@ app.post("/api/info", async (req, res) => {
             }
           : null,
         currentQuality: streams.currentQuality,
+        qualities: streams.qualities || [],
+        hasCookie: !!cookie,
       });
     }
 
     // ===== 普通视频 =====
-    const info = await getVideoInfo(parsed.bvid);
-    const streams = await getStreamUrls(parsed.bvid, info.cid);
+    const info = await getVideoInfo(parsed.bvid, cookie);
+    const streams = await getStreamUrls(parsed.bvid, info.cid, cookie, qn);
 
     res.json({
       type: "video",
@@ -534,6 +593,8 @@ app.post("/api/info", async (req, res) => {
           }
         : null,
       currentQuality: streams.currentQuality,
+      qualities: streams.qualities || [],
+      hasCookie: !!cookie,
     });
   } catch (error) {
     console.error("获取信息失败:", error.message);
@@ -551,7 +612,7 @@ app.post("/api/info", async (req, res) => {
 
 // 下载（SSE 进度流）
 app.post("/api/download", async (req, res) => {
-  const { url, format, epId } = req.body;
+  const { url, format, epId, cookie, qn: reqQn } = req.body;
 
   if (!url || !url.trim()) {
     return res.status(400).json({ error: "请输入链接" });
@@ -559,6 +620,8 @@ app.post("/api/download", async (req, res) => {
 
   const formatType = format === "audio" ? "audio" : "video";
   const jobId = randomUUID();
+  // 画质：有 cookie 时用请求的画质或最高，否则默认 80
+  const qn = cookie ? (reqQn || 127) : 80;
 
   // 设置 SSE
   res.writeHead(200, {
@@ -612,7 +675,7 @@ app.post("/api/download", async (req, res) => {
     let streams;
 
     if (parsed.type === "bangumi") {
-      const bangumiInfo = await getBangumiInfo(parsed.epId, parsed.ssId);
+      const bangumiInfo = await getBangumiInfo(parsed.epId, parsed.ssId, cookie);
       if (aborted) return res.end();
 
       // 定位要下载的剧集（优先使用前端传入的 epId）
@@ -633,7 +696,7 @@ app.post("/api/download", async (req, res) => {
         status: `正在获取《${episode.displayTitle}》播放地址...`,
       });
 
-      streams = await getBangumiStreamUrls(episode.epId, episode.cid);
+      streams = await getBangumiStreamUrls(episode.epId, episode.cid, cookie, qn);
       if (aborted) return res.end();
 
       info = {
@@ -643,10 +706,10 @@ app.post("/api/download", async (req, res) => {
         fileTitle: `${bangumiInfo.title} - ${episode.displayTitle}`,
       };
     } else {
-      info = await getVideoInfo(parsed.bvid);
+      info = await getVideoInfo(parsed.bvid, cookie);
       if (aborted) return res.end();
 
-      streams = await getStreamUrls(parsed.bvid, info.cid);
+      streams = await getStreamUrls(parsed.bvid, info.cid, cookie, qn);
       if (aborted) return res.end();
 
       info = { ...info, fileTitle: info.title };
@@ -682,7 +745,8 @@ app.post("/api/download", async (req, res) => {
               stage: "downloading",
             });
           }
-        }
+        },
+        cookie
       );
 
       if (aborted) return res.end();
@@ -805,7 +869,7 @@ app.post("/api/download", async (req, res) => {
             stage: "downloading-video",
           });
         }
-      });
+      }, cookie);
 
       if (aborted) return res.end();
 
@@ -827,7 +891,7 @@ app.post("/api/download", async (req, res) => {
             stage: "downloading-audio",
           });
         }
-      });
+      }, cookie);
 
       if (aborted) return res.end();
 

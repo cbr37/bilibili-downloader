@@ -890,3 +890,76 @@ body {
 [hidden] {
   display: none !important;
 }
+
+/* ===== Cookie 输入区 ===== */
+.cookie-section {
+  margin-top: 12px;
+}
+
+.cookie-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--transition);
+  width: 100%;
+}
+
+.cookie-toggle:hover {
+  border-color: var(--bili-pink);
+  color: var(--bili-pink);
+  background: var(--bili-pink-bg);
+}
+
+.cookie-toggle.open .chevron {
+  transform: rotate(180deg);
+}
+
+.cookie-toggle .chevron {
+  margin-left: auto;
+  transition: transform .2s ease;
+}
+
+.cookie-input-wrapper {
+  margin-top: 8px;
+  animation: slideUp .25s ease;
+}
+
+.cookie-input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  outline: none;
+  transition: var(--transition);
+}
+
+.cookie-input:focus {
+  border-color: var(--bili-pink);
+  box-shadow: 0 0 0 3px rgba(251,114,153,.12);
+}
+
+.cookie-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.cookie-warning {
+  display: block;
+  margin-top: 4px;
+  color: var(--bili-pink-dark);
+  font-weight: 500;
+}
