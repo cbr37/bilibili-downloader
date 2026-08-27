@@ -46,6 +46,8 @@ const cookieInput = $("cookieInput");
 const qualitySelector = $("qualitySelector");
 const qualitySelect = $("qualitySelect");
 const qualityCount = $("qualityCount");
+const cookieStatus = $("cookieStatus");
+const cookieStatusText = $("cookieStatusText");
 
 // 状态管理
 let currentVideoInfo = null;
@@ -504,7 +506,22 @@ downloadFileBtn.addEventListener("click", () => {
   }, 100);
 });
 
-// 页面加载时聚焦输入框
-window.addEventListener("DOMContentLoaded", () => {
+// 页面加载时聚焦输入框 + 检查默认 Cookie
+window.addEventListener("DOMContentLoaded", async () => {
   urlInput.focus();
+
+  // 检查服务器是否配置了默认 Cookie
+  try {
+    const res = await fetch("/api/status");
+    const data = await res.json();
+    if (data.hasDefaultCookie) {
+      cookieStatusText.textContent = "已启用默认登录，无需填写 Cookie 即可下载 1080P";
+      cookieStatus.hidden = false;
+    } else {
+      cookieStatusText.textContent = "未配置默认登录，免登录可下载 480P；填写 Cookie 可解锁 1080P";
+      cookieStatus.hidden = false;
+    }
+  } catch (e) {
+    // 忽略
+  }
 });

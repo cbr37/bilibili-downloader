@@ -50,6 +50,23 @@ app.use(express.static(join(__dirname, "public")));
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+// 默认 Cookie：服务器管理员通过环境变量 BILI_SESSDATA 配置
+// 用户不填 Cookie 时自动使用，可解锁普通视频 1080P
+const DEFAULT_SESSDATA = process.env.BILI_SESSDATA || "";
+
+// 获取有效 Cookie：优先用户传入，其次默认
+function getEffectiveCookie(userCookie) {
+  if (userCookie && userCookie.trim()) {
+    // 用户可能直接粘贴 SESSDATA 值，也可能粘贴完整 Cookie
+    if (userCookie.includes("SESSDATA=")) return userCookie.trim();
+    return `SESSDATA=${userCookie.trim()}`;
+  }
+  if (DEFAULT_SESSDATA) {
+    return `SESSDATA=${DEFAULT_SESSDATA}`;
+  }
+  return "";
+}
+
 // 转义 curl 参数中的特殊字符（防止命令注入）
 function escapeShellStr(str) {
   return str.replace(/'/g, "'\\''");
@@ -518,14 +535,25 @@ function sanitizeFileName(name) {
 
 // ===== API 路由 =====
 
+// 服务状态（告知前端是否有默认 Cookie）
+app.get("/api/status", (req, res) => {
+  res.json({
+    status: "ok",
+    version: "2.1.0",
+    hasDefaultCookie: !!DEFAULT_SESSDATA,
+  });
+});
+
 // 获取视频/番剧信息
 app.post("/api/info", async (req, res) => {
-  const { url, cookie } = req.body;
+  const { url, cookie: userCookie } = req.body;
 
   if (!url || !url.trim()) {
     return res.status(400).json({ error: "请输入链接" });
   }
 
+  // 合并默认 Cookie 和用户 Cookie
+  const cookie = getEffectiveCookie(userCookie);
   // 有 cookie 时请求最高画质以获取完整画质列表
   const qn = cookie ? 127 : 80;
 
@@ -568,6 +596,7 @@ app.post("/api/info", async (req, res) => {
         currentQuality: streams.currentQuality,
         qualities: streams.qualities || [],
         hasCookie: !!cookie,
+        usingDefaultCookie: !userCookie && !!DEFAULT_SESSDATA,
       });
     }
 
@@ -595,6 +624,7 @@ app.post("/api/info", async (req, res) => {
       currentQuality: streams.currentQuality,
       qualities: streams.qualities || [],
       hasCookie: !!cookie,
+      usingDefaultCookie: !userCookie && !!DEFAULT_SESSDATA,
     });
   } catch (error) {
     console.error("获取信息失败:", error.message);
@@ -612,7 +642,7 @@ app.post("/api/info", async (req, res) => {
 
 // 下载（SSE 进度流）
 app.post("/api/download", async (req, res) => {
-  const { url, format, epId, cookie, qn: reqQn } = req.body;
+  const { url, format, epId, cookie: userCookie, qn: reqQn } = req.body;
 
   if (!url || !url.trim()) {
     return res.status(400).json({ error: "请输入链接" });
@@ -620,6 +650,8 @@ app.post("/api/download", async (req, res) => {
 
   const formatType = format === "audio" ? "audio" : "video";
   const jobId = randomUUID();
+  // 合并默认 Cookie 和用户 Cookie
+  const cookie = getEffectiveCookie(userCookie);
   // 画质：有 cookie 时用请求的画质或最高，否则默认 80
   const qn = cookie ? (reqQn || 127) : 80;
 

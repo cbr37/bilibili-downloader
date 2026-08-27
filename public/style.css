@@ -896,6 +896,24 @@ body {
   margin-top: 12px;
 }
 
+.cookie-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--bili-pink-dark);
+  background: var(--bili-pink-bg);
+  border: 1px solid rgba(251,114,153,.2);
+}
+
+.cookie-status svg {
+  color: var(--bili-pink);
+  flex-shrink: 0;
+}
+
 .cookie-toggle {
   display: flex;
   align-items: center;
