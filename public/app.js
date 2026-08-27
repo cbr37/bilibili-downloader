@@ -15,6 +15,11 @@ const videoCardWrapper = $("videoCardWrapper");
 const videoThumbnail = $("videoThumbnail");
 const videoDuration = $("videoDuration");
 const videoTitle = $("videoTitle");
+const videoTitleText = $("videoTitleText");
+const bangumiBadge = $("bangumiBadge");
+const episodeSelector = $("episodeSelector");
+const episodeSelect = $("episodeSelect");
+const episodeCount = $("episodeCount");
 const videoUploader = $("videoUploader");
 const videoViews = $("videoViews");
 const metaViews = $("metaViews");
@@ -79,6 +84,7 @@ function isValidBilibiliUrl(url) {
     /^https?:\/\/b23\.tv\/.+/,
     /^https?:\/\/m\.bilibili\.com\/video\/.+/,
     /^https?:\/\/(www\.)?bilibili\.com\/bangumi\/.+/,
+    /^https?:\/\/m\.bilibili\.com\/bangumi\/.+/,
   ];
   return patterns.some((p) => p.test(url.trim()));
 }
@@ -90,13 +96,13 @@ async function parseVideo() {
 
   if (!url) {
     urlInputBox.classList.add("error");
-    showToast("请输入视频链接", "error");
+    showToast("请输入链接", "error");
     return;
   }
 
   if (!isValidBilibiliUrl(url)) {
     urlInputBox.classList.add("error");
-    showToast("请输入有效的B站视频链接", "error");
+    showToast("请输入有效的B站视频/番剧链接", "error");
     return;
   }
 
@@ -130,16 +136,45 @@ async function parseVideo() {
   }
 }
 
-// 显示视频信息
+// 显示视频/番剧信息
 function displayVideoInfo(info) {
-  videoTitle.textContent = info.title;
+  videoTitleText.textContent = info.title;
   videoUploader.textContent = info.uploader;
 
-  if (info.duration > 0) {
-    videoDuration.textContent = formatDuration(info.duration);
-    videoDuration.hidden = false;
+  // 番剧类型：显示徽章和剧集选择器
+  const isBangumi = info.type === "bangumi" && info.episodes?.length > 0;
+  bangumiBadge.hidden = !isBangumi;
+
+  if (isBangumi) {
+    // 填充剧集下拉框
+    episodeSelect.innerHTML = "";
+    info.episodes.forEach((ep, idx) => {
+      const option = document.createElement("option");
+      option.value = ep.epId;
+      option.textContent = ep.displayTitle || ep.title;
+      episodeSelect.appendChild(option);
+    });
+    episodeSelect.value = String(info.episodes[info.selectedIdx || 0].epId);
+    episodeCount.textContent = `共 ${info.episodes.length} 集`;
+    episodeSelector.hidden = false;
+
+    // 更新选中集的时长显示
+    const selected = info.episodes[info.selectedIdx || 0];
+    if (selected && selected.duration > 0) {
+      videoDuration.textContent = formatDuration(selected.duration);
+      videoDuration.hidden = false;
+    } else {
+      videoDuration.hidden = true;
+    }
   } else {
-    videoDuration.hidden = true;
+    episodeSelector.hidden = true;
+
+    if (info.duration > 0) {
+      videoDuration.textContent = formatDuration(info.duration);
+      videoDuration.hidden = false;
+    } else {
+      videoDuration.hidden = true;
+    }
   }
 
   if (info.viewCount > 0) {
@@ -154,6 +189,7 @@ function displayVideoInfo(info) {
     videoThumbnail.onerror = () => {
       videoThumbnail.style.display = "none";
     };
+    videoThumbnail.style.display = "";
   }
 
   // 重置下载状态
@@ -168,6 +204,22 @@ function displayVideoInfo(info) {
   videoCardWrapper.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
+// 切换番剧剧集（更新时长显示）
+episodeSelect.addEventListener("change", () => {
+  if (!currentVideoInfo || currentVideoInfo.type !== "bangumi") return;
+  const ep = currentVideoInfo.episodes.find(
+    (e) => e.epId === parseInt(episodeSelect.value, 10)
+  );
+  if (ep) {
+    if (ep.duration > 0) {
+      videoDuration.textContent = formatDuration(ep.duration);
+      videoDuration.hidden = false;
+    } else {
+      videoDuration.hidden = true;
+    }
+  }
+});
+
 // ===== 下载功能 =====
 
 function startDownload(format) {
@@ -175,6 +227,15 @@ function startDownload(format) {
 
   currentFormat = format;
   const formatLabel = format === "audio" ? "音频（MP3）" : "视频（MP4）";
+
+  // 番剧：获取选中的剧集
+  let epId = null;
+  let episodeLabel = "";
+  if (currentVideoInfo.type === "bangumi") {
+    epId = parseInt(episodeSelect.value, 10) || currentVideoInfo.currentEpId;
+    const ep = currentVideoInfo.episodes.find((e) => e.epId === epId);
+    episodeLabel = ep ? `《${ep.displayTitle}》` : "";
+  }
 
   // 重置 UI
   downloadComplete.hidden = true;
@@ -199,7 +260,11 @@ function startDownload(format) {
   fetch("/api/download", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: currentVideoInfo.url, format }),
+    body: JSON.stringify({
+      url: currentVideoInfo.url,
+      format,
+      ...(epId ? { epId } : {}),
+    }),
     signal: controller.signal,
   })
     .then((response) => {
@@ -298,7 +363,14 @@ function handleDownloadEvent(event, controller) {
       progressStatus.textContent = "";
 
       const formatName = currentFormat === "audio" ? "音频" : "视频";
-      completeDesc.textContent = `${currentVideoInfo.title} - ${formatName}已准备就绪`;
+      let displayName = currentVideoInfo.title;
+      if (currentVideoInfo.type === "bangumi") {
+        const ep = currentVideoInfo.episodes.find(
+          (e) => e.epId === parseInt(episodeSelect.value, 10)
+        );
+        if (ep) displayName = `${currentVideoInfo.title} - ${ep.displayTitle}`;
+      }
+      completeDesc.textContent = `${displayName} - ${formatName}已准备就绪`;
 
       downloadFileBtn.href = `/api/file/${event.fileId}`;
 
@@ -306,7 +378,7 @@ function handleDownloadEvent(event, controller) {
         downloadProgress.hidden = true;
         downloadComplete.hidden = false;
         downloadComplete.scrollIntoView({ behavior: "smooth", block: "center" });
-        showToast("下载完成，请点击保存文件", "success");
+        showToast(`下载完成：${displayName}`, "success");
       }, 500);
 
       if (currentEventSource) {

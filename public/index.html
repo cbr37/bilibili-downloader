@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>B站视频音频下载工具</title>
+  <title>B站视频/番剧下载工具</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -38,10 +38,10 @@
       <section class="hero">
         <h1 class="hero-title">
           一键下载<span class="accent">B站视频</span><br>
-          音频 / 视频 自由选择
+          视频 / 音频 / 番剧
         </h1>
         <p class="hero-subtitle">
-          只需粘贴B站视频链接，即可快速解析并下载音频（MP3）或视频（MP4）
+          粘贴B站链接，即可下载视频（MP4）、音频（MP3）或番剧剧集
         </p>
 
         <!-- 链接输入 -->
@@ -55,18 +55,18 @@
               type="text"
               id="urlInput"
               class="url-input"
-              placeholder="粘贴B站视频链接，如 https://www.bilibili.com/video/BV..."
+              placeholder="粘贴B站链接：视频 / 番剧 / 影视 / b23.tv 短链"
               autocomplete="off"
             >
             <button id="parseBtn" class="parse-btn">
-              <span id="parseBtnText" class="parse-btn-text">解析视频</span>
+              <span id="parseBtnText" class="parse-btn-text">解析</span>
               <span id="parseBtnLoader" class="parse-btn-loader" hidden>
                 <span class="spinner"></span>
               </span>
             </button>
           </div>
           <div class="url-hint" id="urlHint">
-            支持普通视频链接（bilibili.com）和短链（b23.tv）
+            支持普通视频、番剧/影视（bilibili.com/bangumi/play/ep...）和短链（b23.tv）
           </div>
         </div>
       </section>
@@ -79,7 +79,10 @@
             <div class="video-duration" id="videoDuration"></div>
           </div>
           <div class="video-card-info">
-            <h3 class="video-title" id="videoTitle"></h3>
+            <h3 class="video-title" id="videoTitle">
+              <span class="bangumi-badge" id="bangumiBadge" hidden>番剧</span>
+              <span id="videoTitleText"></span>
+            </h3>
             <div class="video-meta">
               <span class="meta-item">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -90,6 +93,18 @@
                 <span id="videoViews"></span>
               </span>
             </div>
+
+            <!-- 番剧剧集选择器 -->
+            <div class="episode-selector" id="episodeSelector" hidden>
+              <label class="episode-label" for="episodeSelect">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                <span>选择剧集</span>
+                <span class="episode-count" id="episodeCount"></span>
+              </label>
+              <select id="episodeSelect" class="episode-select">
+              </select>
+            </div>
+
             <div class="download-actions">
               <button class="download-btn download-btn-audio" id="downloadAudioBtn" data-format="audio">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -154,22 +169,22 @@
           <div class="step">
             <div class="step-num">1</div>
             <div class="step-content">
-              <h3>复制视频链接</h3>
-              <p>在B站打开你想下载的视频，复制浏览器地址栏中的链接</p>
+              <h3>复制视频/番剧链接</h3>
+              <p>在B站打开想下载的视频或番剧，复制浏览器地址栏中的链接</p>
             </div>
           </div>
           <div class="step">
             <div class="step-num">2</div>
             <div class="step-content">
               <h3>粘贴并解析</h3>
-              <p>将链接粘贴到上方输入框，点击「解析视频」按钮</p>
+              <p>将链接粘贴到上方输入框，点击「解析」按钮；番剧会显示剧集列表，可自由选集</p>
             </div>
           </div>
           <div class="step">
             <div class="step-num">3</div>
             <div class="step-content">
               <h3>选择格式下载</h3>
-              <p>解析成功后，选择下载音频（MP3）或视频（MP4），等待完成即可保存</p>
+              <p>选择下载音频（MP3）或视频（MP4），等待完成即可保存到本地</p>
             </div>
           </div>
         </div>
@@ -185,7 +200,7 @@
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
             <div class="faq-a">
-              <p>支持 bilibili.com 的普通视频链接、番剧链接，以及 b23.tv 短链接。不支持直播回放和会员专属内容。</p>
+              <p>支持 bilibili.com 的普通视频链接、番剧/影视链接（bangumi/play/ep... 或 ss...），以及 b23.tv 短链接。不支持直播回放和会员专属内容。</p>
             </div>
           </div>
           <div class="faq-item">

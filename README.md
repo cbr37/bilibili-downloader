@@ -1,14 +1,25 @@
-# B站视频音频下载工具
+# B站视频/番剧下载工具
 
-一键下载B站视频的音频(MP3)或视频(MP4)，只需粘贴视频链接即可。
+一键下载B站视频的音频(MP3)、视频(MP4)或番剧剧集，只需粘贴链接即可。
 
 ## 功能
 
 - 解析B站视频信息（标题、UP主、时长、画质）
+- **番剧/影视支持**：自动识别 ep/ss 链接，显示完整剧集列表，可自由选集下载
 - 下载音频为 MP3 格式
 - 下载视频为 MP4 格式（H.264 + AAC）
-- 实时下载进度显示
-- 支持普通链接和短链(b23.tv)
+- 文件名自动使用「番剧名 - 剧集标题」格式
+- 实时下载进度显示（SSE 流式推送）
+- 支持普通链接、番剧链接和短链(b23.tv)
+
+## 支持的链接格式
+
+| 类型 | 示例 |
+|------|------|
+| 普通视频 | `https://www.bilibili.com/video/BV1xxx` |
+| 番剧（单集） | `https://www.bilibili.com/bangumi/play/ep259699` |
+| 番剧（全集） | `https://www.bilibili.com/bangumi/play/ss26169` |
+| 短链 | `https://b23.tv/xxxxx` |
 
 ## 技术栈
 
@@ -16,6 +27,9 @@
 - 前端：原生 HTML/CSS/JS
 - 下载：curl + ffmpeg
 - API：B站官方接口直连
+  - 视频信息：`/x/web-interface/view`
+  - 番剧信息：`/pgc/view/web/season`
+  - 播放地址：`/x/player/playurl`、`/pgc/player/web/playurl`
 
 ## 本地运行
 
@@ -26,11 +40,24 @@ node server.js
 
 访问 http://localhost:3000
 
+## Docker 部署
+
+```bash
+docker build -t bili-dl .
+docker run -d -p 3000:3000 --restart unless-stopped bili-dl
+```
+
 ## 依赖
 
 - Node.js 18+
 - ffmpeg（用于音频转码和视频合并）
 - curl（用于下载流文件）
+
+## 已知限制
+
+- 未登录状态下，画质最高 480P（B站限制，大会员内容需要 Cookie）
+- 会员专属剧集无法下载
+- 海外服务器部署时，B站 CDN 可能拒绝访问（需中国大陆 IP）
 
 ## 声明
 

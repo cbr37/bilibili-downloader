@@ -83,6 +83,16 @@ function extractBvId(url) {
   return match ? match[0] : null;
 }
 
+// 提取番剧/影视 ep_id 或 ss_id
+function extractBangumiIds(url) {
+  const epMatch = url.match(/\/ep(\d+)/) || url.match(/[?&]ep(\d+)/);
+  const ssMatch = url.match(/\/ss(\d+)/) || url.match(/[?&]ss(\d+)/);
+  return {
+    epId: epMatch ? parseInt(epMatch[1], 10) : null,
+    ssId: ssMatch ? parseInt(ssMatch[1], 10) : null,
+  };
+}
+
 // 解析 b23.tv 短链接，返回最终 URL
 async function resolveShortUrl(url) {
   try {
@@ -96,7 +106,7 @@ async function resolveShortUrl(url) {
   }
 }
 
-// 验证并解析B站URL
+// 验证并解析B站URL（自动区分普通视频 / 番剧 / 影视）
 async function parseBilibiliUrl(url) {
   const trimmed = url.trim();
 
@@ -106,12 +116,19 @@ async function parseBilibiliUrl(url) {
     resolvedUrl = await resolveShortUrl(trimmed);
   }
 
+  // 番剧/影视链接（含 ep 或 ss 编号）
+  const { epId, ssId } = extractBangumiIds(resolvedUrl);
+  if (epId || ssId) {
+    return { type: "bangumi", epId, ssId, url: resolvedUrl };
+  }
+
+  // 普通视频链接
   const bvid = extractBvId(resolvedUrl);
   if (!bvid) {
     return null;
   }
 
-  return { bvid, url: resolvedUrl };
+  return { type: "video", bvid, url: resolvedUrl };
 }
 
 // ===== B站 API =====
@@ -195,6 +212,104 @@ async function getStreamUrls(bvid, cid) {
     qualities,
     currentQuality: d.quality,
     supportFormats: d.support_formats || [],
+  };
+}
+
+// ===== 番剧 API =====
+
+// 获取番剧/影视信息（含剧集列表）
+async function getBangumiInfo(epId, ssId) {
+  const apiUrl = epId
+    ? `https://api.bilibili.com/pgc/view/web/season?ep_id=${epId}`
+    : `https://api.bilibili.com/pgc/view/web/season?season_id=${ssId}`;
+  const data = await bilibiliApiGet(apiUrl);
+
+  if (data.code !== 0) {
+    throw new Error(data.message || "获取番剧信息失败");
+  }
+
+  const r = data.result;
+
+  // 剧集列表（episode.duration 为毫秒）
+  const episodes = (r.episodes || []).map((ep, idx) => ({
+    epId: ep.id ?? ep.ep_id,
+    cid: ep.cid,
+    aid: ep.aid,
+    bvid: ep.bvid,
+    title: ep.title ? `第${ep.title}话` : `第${idx + 1}话`,
+    longTitle: ep.long_title || "",
+    displayTitle:
+      ep.show_title || (ep.long_title ? `第${ep.title}话 ${ep.long_title}` : `第${ep.title || idx + 1}话`),
+    duration: Math.floor((ep.duration || 0) / 1000),
+    cover: ep.cover,
+  }));
+
+  if (episodes.length === 0) {
+    throw new Error("该番剧没有可下载的剧集");
+  }
+
+  // 根据 URL 中的 ep 定位选中集
+  let selectedIdx = 0;
+  if (epId) {
+    const idx = episodes.findIndex((e) => e.epId === epId);
+    if (idx >= 0) selectedIdx = idx;
+  }
+  const selected = episodes[selectedIdx];
+
+  return {
+    type: "bangumi",
+    title: r.title,
+    cover: r.cover,
+    thumbnail: selected.cover || r.cover,
+    episodes,
+    selectedIdx,
+    seasonId: r.season_id,
+    total: r.total || episodes.length,
+    // 与普通视频卡片兼容的字段（使用选中集数据）
+    duration: selected.duration,
+    uploader: r.uploader?.uname || "番剧",
+    viewCount: r.stat?.views || 0,
+    likeCount: 0,
+    cid: selected.cid,
+    aid: selected.aid,
+    desc: r.evaluate || "",
+  };
+}
+
+// 获取番剧播放地址（DASH 流）
+async function getBangumiStreamUrls(epId, cid) {
+  const apiUrl = `https://api.bilibili.com/pgc/player/web/playurl?ep_id=${epId}&cid=${cid}&qn=80&fnval=4048&fourk=1`;
+  const data = await bilibiliApiGet(apiUrl);
+
+  if (data.code !== 0) {
+    throw new Error(data.message || "获取播放地址失败");
+  }
+
+  const d = data.result;
+  if (!d.dash) {
+    throw new Error("该剧集暂不支持DASH格式下载");
+  }
+
+  // 选择最佳视频流（优先 avc1 编码，兼容性最好）
+  const videos = d.dash.video || [];
+  const avcVideos = videos.filter((v) =>
+    (v.codecs || "").startsWith("avc1")
+  );
+  const bestVideo =
+    (avcVideos.length > 0 ? avcVideos : videos).sort(
+      (a, b) => (b.width || 0) - (a.width || 0)
+    )[0] || null;
+
+  // 选择最佳音频流
+  const audios = d.dash.audio || [];
+  const bestAudio = audios.sort(
+    (a, b) => (b.bandwidth || 0) - (a.bandwidth || 0)
+  )[0] || null;
+
+  return {
+    video: bestVideo,
+    audio: bestAudio,
+    currentQuality: d.quality,
   };
 }
 
@@ -339,14 +454,24 @@ function mergeVideoAudio(
   });
 }
 
+// 生成安全的文件名（去除非法字符，限制长度）
+function sanitizeFileName(name) {
+  if (!name) return "";
+  return name
+    .replace(/[\\/:*?"<>|\n\r\t]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+}
+
 // ===== API 路由 =====
 
-// 获取视频信息
+// 获取视频/番剧信息
 app.post("/api/info", async (req, res) => {
   const { url } = req.body;
 
   if (!url || !url.trim()) {
-    return res.status(400).json({ error: "请输入视频链接" });
+    return res.status(400).json({ error: "请输入链接" });
   }
 
   try {
@@ -354,13 +479,45 @@ app.post("/api/info", async (req, res) => {
     if (!parsed) {
       return res
         .status(400)
-        .json({ error: "无法识别视频链接，请检查是否为B站视频URL" });
+        .json({ error: "无法识别链接，请检查是否为B站视频/番剧URL" });
     }
 
+    // ===== 番剧/影视 =====
+    if (parsed.type === "bangumi") {
+      const info = await getBangumiInfo(parsed.epId, parsed.ssId);
+      const selected = info.episodes[info.selectedIdx];
+      const streams = await getBangumiStreamUrls(
+        selected.epId,
+        selected.cid
+      );
+
+      return res.json({
+        ...info,
+        url: parsed.url,
+        currentEpId: selected.epId,
+        videoInfo: streams.video
+          ? {
+              width: streams.video.width,
+              height: streams.video.height,
+              codecs: streams.video.codecs,
+            }
+          : null,
+        audioInfo: streams.audio
+          ? {
+              bandwidth: streams.audio.bandwidth,
+              codecs: streams.audio.codecs,
+            }
+          : null,
+        currentQuality: streams.currentQuality,
+      });
+    }
+
+    // ===== 普通视频 =====
     const info = await getVideoInfo(parsed.bvid);
     const streams = await getStreamUrls(parsed.bvid, info.cid);
 
     res.json({
+      type: "video",
       ...info,
       url: parsed.url,
       videoInfo: streams.video
@@ -380,13 +537,13 @@ app.post("/api/info", async (req, res) => {
     });
   } catch (error) {
     console.error("获取信息失败:", error.message);
-    let msg = error.message || "获取视频信息失败";
+    let msg = error.message || "获取信息失败";
     // 屏蔽原始命令信息，显示友好提示
     if (msg.includes("Command failed") || msg.includes("curl")) {
       msg = "请求B站API超时，请稍后重试";
     }
     if (msg.includes("Unexpected token") || msg.includes("JSON")) {
-      msg = "解析视频信息失败，视频可能已下架或需要登录";
+      msg = "解析信息失败，内容可能已下架或需要登录";
     }
     res.status(500).json({ error: msg });
   }
@@ -394,10 +551,10 @@ app.post("/api/info", async (req, res) => {
 
 // 下载（SSE 进度流）
 app.post("/api/download", async (req, res) => {
-  const { url, format } = req.body;
+  const { url, format, epId } = req.body;
 
   if (!url || !url.trim()) {
-    return res.status(400).json({ error: "请输入视频链接" });
+    return res.status(400).json({ error: "请输入链接" });
   }
 
   const formatType = format === "audio" ? "audio" : "video";
@@ -444,17 +601,56 @@ app.post("/api/download", async (req, res) => {
   try {
     const parsed = await parseBilibiliUrl(url);
     if (!parsed) {
-      sendEvent({ type: "error", error: "无法识别视频链接" });
+      sendEvent({ type: "error", error: "无法识别链接" });
       return res.end();
     }
 
     sendEvent({ type: "progress", percent: 0, stage: "fetching" });
 
-    const info = await getVideoInfo(parsed.bvid);
-    if (aborted) return res.end();
+    // ===== 解析信息（普通视频 / 番剧）=====
+    let info;
+    let streams;
 
-    const streams = await getStreamUrls(parsed.bvid, info.cid);
-    if (aborted) return res.end();
+    if (parsed.type === "bangumi") {
+      const bangumiInfo = await getBangumiInfo(parsed.epId, parsed.ssId);
+      if (aborted) return res.end();
+
+      // 定位要下载的剧集（优先使用前端传入的 epId）
+      let episode = null;
+      if (epId) {
+        episode = bangumiInfo.episodes.find(
+          (e) => e.epId === parseInt(epId, 10)
+        );
+      }
+      if (!episode) {
+        episode = bangumiInfo.episodes[bangumiInfo.selectedIdx];
+      }
+
+      sendEvent({
+        type: "progress",
+        percent: 2,
+        stage: "fetching",
+        status: `正在获取《${episode.displayTitle}》播放地址...`,
+      });
+
+      streams = await getBangumiStreamUrls(episode.epId, episode.cid);
+      if (aborted) return res.end();
+
+      info = {
+        ...bangumiInfo,
+        duration: episode.duration,
+        // 文件名：番剧名 + 剧集标题
+        fileTitle: `${bangumiInfo.title} - ${episode.displayTitle}`,
+      };
+    } else {
+      info = await getVideoInfo(parsed.bvid);
+      if (aborted) return res.end();
+
+      streams = await getStreamUrls(parsed.bvid, info.cid);
+      if (aborted) return res.end();
+
+      info = { ...info, fileTitle: info.title };
+    }
 
     if (formatType === "audio") {
       // ===== 下载音频 =====
@@ -564,10 +760,11 @@ app.post("/api/download", async (req, res) => {
         unlinkSync(audioRaw);
       } catch (e) {}
 
-      // 完成
+      // 完成（文件名使用视频/剧集标题）
+      const audioFileName = `${sanitizeFileName(info.fileTitle)}.mp3`;
       downloadJobs.set(jobId, {
         filePath: mp3Path,
-        fileName: `${jobId}.mp3`,
+        fileName: audioFileName,
         ext: ".mp3",
         createdAt: Date.now(),
       });
@@ -576,7 +773,7 @@ app.post("/api/download", async (req, res) => {
         type: "complete",
         jobId,
         fileId: jobId,
-        fileName: `${jobId}.mp3`,
+        fileName: audioFileName,
       });
       activeProcesses.delete(jobId);
     } else {
@@ -699,9 +896,10 @@ app.post("/api/download", async (req, res) => {
         unlinkSync(audioRaw);
       } catch (e) {}
 
+      const videoFileName = `${sanitizeFileName(info.fileTitle)}.mp4`;
       downloadJobs.set(jobId, {
         filePath: mp4Path,
-        fileName: `${jobId}.mp4`,
+        fileName: videoFileName,
         ext: ".mp4",
         createdAt: Date.now(),
       });
@@ -710,7 +908,7 @@ app.post("/api/download", async (req, res) => {
         type: "complete",
         jobId,
         fileId: jobId,
-        fileName: `${jobId}.mp4`,
+        fileName: videoFileName,
       });
       activeProcesses.delete(jobId);
     }
@@ -746,10 +944,12 @@ app.get("/api/file/:jobId", (req, res) => {
 
   const contentType = mimeTypes[job.ext] || "application/octet-stream";
 
+  // 支持 UTF-8 文件名（RFC 5987），中英文都正常显示
+  const asciiFallback = job.fileName.replace(/[^\x20-\x7E]/g, "_");
   res.setHeader("Content-Type", contentType);
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${encodeURIComponent(job.fileName)}"`
+    `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(job.fileName)}`
   );
 
   res.sendFile(job.filePath, (err) => {

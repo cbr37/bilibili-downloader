@@ -370,6 +370,78 @@ body {
   color: var(--text-tertiary);
 }
 
+/* ===== 番剧徽章 ===== */
+.bangumi-badge {
+  display: inline-block;
+  vertical-align: 2px;
+  margin-right: 8px;
+  padding: 1px 10px;
+  background: linear-gradient(135deg, var(--bili-pink), var(--bili-pink-dark));
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-pink);
+}
+
+/* ===== 剧集选择器 ===== */
+.episode-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.episode-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.episode-label svg {
+  color: var(--bili-pink);
+}
+
+.episode-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  background: var(--bili-pink-bg);
+  padding: 1px 8px;
+  border-radius: 999px;
+}
+
+.episode-select {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: var(--transition);
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='%23FB7299' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 38px;
+}
+
+.episode-select:hover {
+  border-color: var(--bili-pink);
+}
+
+.episode-select:focus {
+  border-color: var(--bili-pink);
+  box-shadow: 0 0 0 3px rgba(251,114,153,.12);
+}
+
 .download-actions {
   display: flex;
   gap: 12px;
